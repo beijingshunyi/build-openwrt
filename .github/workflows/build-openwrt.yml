@@ -14,6 +14,12 @@ jobs:
       TERM: xterm-256color
       DEVICE: ${{ inputs.device }}
     steps:
+      # 【关键步骤 1】暴力清理工作目录，防止缓存污染
+      - name: Purge build environment
+        run: |
+          sudo rm -rf /home/runner/work/_temp/*
+          sudo rm -rf .config
+
       - name: Checkout code
         uses: actions/checkout@v4
 
@@ -25,10 +31,13 @@ jobs:
 
       - name: Clone source
         run: |
-          # 【终极换源】使用 Lienol 的 OpenWrt 源，彻底解决 ImmortalWrt 的依赖死锁
+          # 使用 Lean 源 (Lienol) 或者 OpenWrt 官方源，避开 ImmortalWrt 的坑
           git clone -b master https://github.com/Lienol/openwrt.git openwrt
           cd openwrt
-          # Lienol 源默认配置了 feeds，不需要手动添加第三方源即可获得 Passwall
+          # 确保没有旧的 feeds 配置
+          rm -f feeds.conf.default
+          # Lean 源自带 feeds，通常不需要额外添加，或者只添加极简配置
+          # 如果 Lean 源本身就有问题，这里会是最干净的状态
 
       - name: Update feeds
         run: |
@@ -40,13 +49,18 @@ jobs:
           cd openwrt
           ./scripts/feeds install -a --force-missing
 
-      - name: Generate config
+      - name: Generate config (CLEAN BUILD)
         run: |
           cd openwrt
-          # 针对 Lienol 源的配置 (lean 源的 passwall 通常叫 luci-app-passwall 或者包含在 luci 中)
-          # 这里我们尝试配置最经典的 Passwall
-          echo -e "CONFIG_TARGET_ipq60xx=y\nCONFIG_TARGET_ipq60xx_generic=y\nCONFIG_TARGET_ipq60xx_generic_DEVICE_jdcloud_ax1800-pro=y\nCONFIG_LUCI=y\nCONFIG_LUCI_LANG_zh_Hans=y\nCONFIG_PACKAGE_luci-app-passwall=y\nCONFIG_PACKAGE_wpad-openssl=y" > .config
+          # 【关键步骤 2】清除任何可能存在的旧配置
+          rm -f .config
           
+          # 【关键步骤 3】生成一个绝对纯净的配置
+          # 彻底禁用 Passwall, SSR-Plus, fchomo 等所有容易冲突的包
+          # 如果这个配置都过不去，那说明 GitHub Actions 的环境彻底坏了
+          echo -e "CONFIG_TARGET_ipq60xx=y\nCONFIG_TARGET_ipq60xx_generic=y\nCONFIG_TARGET_ipq60xx_generic_DEVICE_jdcloud_ax1800-pro=y\nCONFIG_LUCI=y\nCONFIG_LUCI_LANG_zh_Hans=y\nCONFIG_PACKAGE_wpad-openssl=y" > .config
+          
+          # 强制重新生成
           make defconfig
 
       - name: Download dependencies
