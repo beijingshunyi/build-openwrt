@@ -35,3 +35,14 @@ uci set wireless.radio0.disabled='0'
 uci commit wireless
 
 echo "All done!"
+# 设置固件默认IP为192.168.3.1
+uci set network.lan.ipaddr='192.168.3.1'
+uci commit network
+
+# 设置PassWall默认启用（可选）
+uci set passwall.config.enable='1'
+uci commit passwall
+
+# 设置默认语言为中文
+uci set luci.main.lang='zh_cn'
+uci commit luci
