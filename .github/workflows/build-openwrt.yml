@@ -25,10 +25,10 @@ jobs:
 
       - name: Clone source
         run: |
-          git clone --depth=1 --branch openwrt-23.05 https://github.com/immortalwrt/immortalwrt.git openwrt
+          # 【终极换源】使用 Lienol 的 OpenWrt 源，彻底解决 ImmortalWrt 的依赖死锁
+          git clone -b master https://github.com/Lienol/openwrt.git openwrt
           cd openwrt
-          # 强制确认：不添加任何第三方源
-          echo "# No external sources added to prevent dependency conflicts" >> feeds.conf.default
+          # Lienol 源默认配置了 feeds，不需要手动添加第三方源即可获得 Passwall
 
       - name: Update feeds
         run: |
@@ -40,13 +40,12 @@ jobs:
           cd openwrt
           ./scripts/feeds install -a --force-missing
 
-      - name: Generate config (Minimal Version)
+      - name: Generate config
         run: |
           cd openwrt
-          # 【强制最小化配置】
-          # 移除了 ALL 代理插件 (Passwall, SSR Plus, etc.)
-          # 如果这都报错 fchomo，那说明环境有问题
-          echo -e "CONFIG_TARGET_ipq60xx=y\nCONFIG_TARGET_ipq60xx_generic=y\nCONFIG_TARGET_ipq60xx_generic_DEVICE_jdcloud_ax1800-pro=y\nCONFIG_LUCI=y\nCONFIG_LUCI_LANG_zh_Hans=y\nCONFIG_PACKAGE_wpad-openssl=y" > .config
+          # 针对 Lienol 源的配置 (lean 源的 passwall 通常叫 luci-app-passwall 或者包含在 luci 中)
+          # 这里我们尝试配置最经典的 Passwall
+          echo -e "CONFIG_TARGET_ipq60xx=y\nCONFIG_TARGET_ipq60xx_generic=y\nCONFIG_TARGET_ipq60xx_generic_DEVICE_jdcloud_ax1800-pro=y\nCONFIG_LUCI=y\nCONFIG_LUCI_LANG_zh_Hans=y\nCONFIG_PACKAGE_luci-app-passwall=y\nCONFIG_PACKAGE_wpad-openssl=y" > .config
           
           make defconfig
 
