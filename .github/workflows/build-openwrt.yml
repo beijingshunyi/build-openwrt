@@ -14,64 +14,65 @@ jobs:
     runs-on: ubuntu-22.04
 
     steps:
-    - name: Checkout
-      uses: actions/checkout@v4
+      - name: Checkout code
+        uses: actions/checkout@v4
 
-    - name: Initialization environment
-      run: |
-        sudo apt update -y
-        sudo apt install -y build-essential clang flex bison g++ gawk \
-        gcc-multilib g++-multilib gettext git libncurses5-dev libssl-dev \
-        python3-setuptools rsync swig unzip zlib1g-dev file wget
+      - name: Install build dependencies
+        run: |
+          sudo apt update -y
+          sudo apt install -y build-essential clang flex bison g++ gawk \
+          gcc-multilib g++-multilib gettext git libncurses5-dev libssl-dev \
+          python3-setuptools rsync swig unzip zlib1g-dev file wget
 
-    - name: Clone source code (支持jdcloud_ax1800-pro)
-      run: |
-        git clone --depth=1 --branch openwrt-23.05 https://github.com/immortalwrt/immortalwrt.git openwrt
-        cp -r files openwrt/ || true
-        chmod 755 -R openwrt/files || true
-        cat feeds.buildinfo >> openwrt/feeds.conf.default
+      - name: Clone ImmortalWrt source (support jdcloud_ax1800-pro)
+        run: |
+          git clone --depth=1 --branch openwrt-23.05 https://github.com/immortalwrt/immortalwrt.git openwrt
+          cp -r files openwrt/ || true
+          chmod 755 -R openwrt/files || true
+          cat feeds.buildinfo >> openwrt/feeds.conf.default
 
-    - name: Update feeds
-      run: cd openwrt && ./scripts/feeds update -a && ./scripts/feeds install -a
+      - name: Update and install feeds
+        run: |
+          cd openwrt
+          ./scripts/feeds update -a
+          ./scripts/feeds install -a
 
-    - name: Load custom configuration (彻底修复heredoc缩进)
-      run: |
-        # 适配京东云AX1800 Pro型号识别
-        if [ "${{ inputs.device }}" = "jdcloud_ax1800-pro" ]; then
-# 关键：heredoc内无任何缩进，EOF顶行
-cat <<EOF >openwrt/.config
-CONFIG_TARGET_ipq60xx=y
-CONFIG_TARGET_ipq60xx_generic=y
-CONFIG_TARGET_ipq60xx_generic_DEVICE_jdcloud_ax1800-pro=y
-CONFIG_LUCI_LANG_zh_Hans=y
-EOF
-        else
-          if ! target_device=$(grep -m 1 "^config TARGET_.*$(echo ${{ inputs.device }} | xargs)" openwrt/tmp/.config-target.in); then
-            echo "Error: The ${{ inputs.device }} device you input does not exist!"
-            exit 1
+      - name: Generate device config (no heredoc indent error)
+        run: |
+          # 彻底弃用heredoc，用echo逐行写入（无语法风险）
+          if [ "${{ inputs.device }}" = "jdcloud_ax1800-pro" ]; then
+            echo "CONFIG_TARGET_ipq60xx=y" > openwrt/.config
+            echo "CONFIG_TARGET_ipq60xx_generic=y" >> openwrt/.config
+            echo "CONFIG_TARGET_ipq60xx_generic_DEVICE_jdcloud_ax1800-pro=y" >> openwrt/.config
+            echo "CONFIG_LUCI_LANG_zh_Hans=y" >> openwrt/.config
+          else
+            if ! target_device=$(grep -m 1 "^config TARGET_.*$(echo ${{ inputs.device }} | xargs)" openwrt/tmp/.config-target.in); then
+              echo "Error: The ${{ inputs.device }} device you input does not exist!"
+              exit 1
+            fi
+            DEVICE_NAME=$(echo $target_device | awk -F "DEVICE_" '{print $2}')
+            echo "CONFIG_TARGET_$(echo $target_device | awk -F "_" '{print $2}')=y" > openwrt/.config
+            echo "CONFIG_TARGET_$(echo $target_device | awk -F "_" '{print $2}')_$(echo $target_device | awk -F "_" '{print $3}')=y" >> openwrt/.config
+            echo "CONFIG_TARGET_$(echo $target_device | awk -F "_" '{print $2}')_$(echo $target_device | awk -F "_" '{print $3}')_DEVICE_${DEVICE_NAME}=y" >> openwrt/.config
+            echo "CONFIG_LUCI_LANG_zh_Hans=y" >> openwrt/.config
           fi
-          DEVICE_NAME=$(echo $target_device | awk -F "DEVICE_" '{print $2}')
-# 关键：heredoc内无任何缩进，EOF顶行
-cat <<EOF >openwrt/.config
-CONFIG_TARGET_$(echo $target_device | awk -F "_" '{print $2}')=y
-CONFIG_TARGET_$(echo $target_device | awk -F "_" '{print $2}')_$(echo $target_device | awk -F "_" '{print $3}')=y
-CONFIG_TARGET_$(echo $target_device | awk -F "_" '{print $2}')_$(echo $target_device | awk -F "_" '{print $3}')_DEVICE_${DEVICE_NAME}=y
-CONFIG_LUCI_LANG_zh_Hans=y
-EOF
-        fi
-        # 追加PassWall配置
-        cat config.buildinfo >> openwrt/.config
-        cat openwrt/.config
-        echo "DEVICE_NAME=${{ inputs.device }}" >> $GITHUB_ENV
+          # Append PassWall config
+          cat config.buildinfo >> openwrt/.config
+          cat openwrt/.config
+          echo "DEVICE_NAME=${{ inputs.device }}" >> $GITHUB_ENV
 
-    - name: Download dependencies
-      run: cd openwrt && make download -j$(nproc)
+      - name: Download dependencies
+        run: |
+          cd openwrt
+          make download -j$(nproc)
 
-    - name: Compile firmware
-      run: cd openwrt && make -j$(($(nproc)-1)) V=s
+      - name: Compile firmware
+        run: |
+          cd openwrt
+          make -j$(($(nproc)-1)) V=s
 
-    - name: Upload firmware
-      uses: actions/upload-artifact@v4
-      with:
-        name: ${{ env.DEVICE_NAME }}-firmware
-        path: openwrt/bin/targets/*/*/*.bin
+      - name: Upload firmware artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ env.DEVICE_NAME }}-firmware
+          path: openwrt/bin/targets/*/*/*.bin
