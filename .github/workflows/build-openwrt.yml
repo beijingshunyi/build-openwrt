@@ -1,10 +1,10 @@
 name: Build OpenWrt
-run-name: ${{ inputs.device }}
+run-name: Build ${{ inputs.device }}
 on:
   workflow_dispatch:
     inputs:
       device:
-        description: 设备型号
+        description: Device Model
         required: true
         default: jdcloud_ax1800-pro
 jobs:
@@ -38,20 +38,16 @@ jobs:
           cd openwrt
           ./scripts/feeds install -a --force-missing
 
-      - name: Delete old config file (ROOT CAUSE FIX)
+      - name: Delete old config file
         run: |
-          # 【关键修复】删除根目录下残留的旧配置文件，防止 make defconfig 读取它导致死锁
           cd openwrt
           rm -f .config
-          # 同时也删除父目录里的，防止被误引入
           rm -f ../.config
 
       - name: Generate config
         run: |
           cd openwrt
-          # 生成纯净配置 (使用 Lean 源的 passwall)
           echo -e "CONFIG_TARGET_ipq60xx=y\nCONFIG_TARGET_ipq60xx_generic=y\nCONFIG_TARGET_ipq60xx_generic_DEVICE_jdcloud_ax1800-pro=y\nCONFIG_LUCI=y\nCONFIG_LUCI_LANG_zh_Hans=y\nCONFIG_PACKAGE_luci-app-passwall=y\nCONFIG_PACKAGE_wpad-openssl=y" > .config
-          
           make defconfig
 
       - name: Download dependencies
@@ -70,4 +66,4 @@ jobs:
         with:
           name: ${{ env.DEVICE }}-firmware
           path: openwrt/bin/targets/ipq60xx/generic/*.bin
-            if-no-files-found: warn
+          if-no-files-found: warn
