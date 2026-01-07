@@ -27,9 +27,8 @@ jobs:
         run: |
           git clone --depth=1 --branch openwrt-23.05 https://github.com/immortalwrt/immortalwrt.git openwrt
           cd openwrt
-          # 【彻底切断】不再添加任何第三方源，彻底杜绝 fchomo/nikki 的干扰
-          # echo "src-git kenzo https://github.com/kenzok8/openwrt-packages.git;master" >> feeds.conf.default
-          # echo "src-git small https://github.com/kenzok8/small.git;master" >> feeds.conf.default
+          # 强制确认：不添加任何第三方源
+          echo "# No external sources added to prevent dependency conflicts" >> feeds.conf.default
 
       - name: Update feeds
         run: |
@@ -41,12 +40,13 @@ jobs:
           cd openwrt
           ./scripts/feeds install -a --force-missing
 
-      - name: Generate config
+      - name: Generate config (Minimal Version)
         run: |
           cd openwrt
-          # 生成配置：只保留官方源自带的 SSR Plus
-          # 注意：由于没有第三方源，部分额外的插件可能不可用，但基础 SSR/V2ray 功能是有的
-          echo -e "CONFIG_TARGET_ipq60xx=y\nCONFIG_TARGET_ipq60xx_generic=y\nCONFIG_TARGET_ipq60xx_generic_DEVICE_jdcloud_ax1800-pro=y\nCONFIG_LUCI=y\nCONFIG_LUCI_LANG_zh_Hans=y\nCONFIG_PACKAGE_curl=y\nCONFIG_PACKAGE_ipset=y\nCONFIG_PACKAGE_kmod-tun=y\nCONFIG_PACKAGE_iptables-mod-tproxy=y\nCONFIG_PACKAGE_luci-app-ssr-plus=y\nCONFIG_PACKAGE_luci-i18n-ssr-plus-zh-cn=y\nCONFIG_PACKAGE_wpad-openssl=y" > .config
+          # 【强制最小化配置】
+          # 移除了 ALL 代理插件 (Passwall, SSR Plus, etc.)
+          # 如果这都报错 fchomo，那说明环境有问题
+          echo -e "CONFIG_TARGET_ipq60xx=y\nCONFIG_TARGET_ipq60xx_generic=y\nCONFIG_TARGET_ipq60xx_generic_DEVICE_jdcloud_ax1800-pro=y\nCONFIG_LUCI=y\nCONFIG_LUCI_LANG_zh_Hans=y\nCONFIG_PACKAGE_wpad-openssl=y" > .config
           
           make defconfig
 
