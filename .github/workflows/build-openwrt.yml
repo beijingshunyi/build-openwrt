@@ -25,7 +25,8 @@ jobs:
 
       - name: Clone source
         run: |
-          git clone -b master https://github.com/Lienol/openwrt.git openwrt
+          # 【关键修改】切换回 22.03 分支，彻底避开 firewall4 导致的 fchomo 死锁
+          git clone -b openwrt-22.03 https://github.com/Lienol/openwrt.git openwrt
           cd openwrt
 
       - name: Update feeds
@@ -47,7 +48,9 @@ jobs:
       - name: Generate config
         run: |
           cd openwrt
+          # 配置 Lean 22.03 的 Passwall
           echo -e "CONFIG_TARGET_ipq60xx=y\nCONFIG_TARGET_ipq60xx_generic=y\nCONFIG_TARGET_ipq60xx_generic_DEVICE_jdcloud_ax1800-pro=y\nCONFIG_LUCI=y\nCONFIG_LUCI_LANG_zh_Hans=y\nCONFIG_PACKAGE_luci-app-passwall=y\nCONFIG_PACKAGE_wpad-openssl=y" > .config
+          
           make defconfig
 
       - name: Download dependencies
