@@ -27,27 +27,44 @@ jobs:
         run: |
           git clone --depth=1 --branch openwrt-23.05 https://github.com/immortalwrt/immortalwrt.git openwrt
           cd openwrt
-          # 【注意】这里不再添加任何第三方源，彻底解决依赖冲突
-          # 如果你需要第三方源的特定软件，必须确保该软件不引入冲突包
-          # 官方源已包含 passwall，xray，sing-box 等
+          # 【策略调整】不添加 kenzo，只添加 small 源来获取 passwall
+          echo "src-git small https://github.com/kenzok8/small.git;master" >> feeds.conf.default
 
       - name: Update feeds
         run: |
           cd openwrt
           ./scripts/feeds update -a
 
-      - name: Install feeds
+      - name: Install feeds and Remove Conflicts
         run: |
           cd openwrt
-          ./scripts/feeds install -a --force-missing
+          
+          # 1. 先删除 feeds 源码目录中的 nikki (fchomo 的依赖)
+          # 必须在 install 之前删，否则 install 链接会建立依赖死锁
+          echo "清理冲突源码..."
+          rm -rf feeds/packages/net/nikki
+          rm -rf feeds/luci/applications/luci-app-fchomo
+          
+          # 2. 执行安装，此时 nikki 已经没了，passwall 虽然依赖它，但会提示找不到而跳过
+          echo "开始安装 Feeds..."
+          ./scripts/feeds install -a --force-missing || true
+          
+          # 3. 再次清理 package 链接目录，防止遗留
+          find package/feeds -name "nikki" -type d -exec rm -rf {} + || true
+          find package/feeds -name "luci-app-fchomo" -type d -exec rm -rf {} + || true
+          
+          echo "清理完成，准备生成配置。"
 
-      - name: Copy config
+      - name: Generate config
         run: |
           cd openwrt
-          # 复制仓库根目录下的 .config 文件到源码目录
-          cp ../.config .config
-          # 直接生效配置，不运行 make defconfig 以防止引入未选择的依赖冲突
-          # 如果官方源中确实没有某些包，这里会自动忽略，不会报错
+          
+          # 写入配置：注意这里明确禁用了官方带 bug 的包，选用了 small 源的 passwall
+          # 如果 small 的 passwall 也不可用，编译阶段会报错，但至少能过了 defconfig
+          echo -e "CONFIG_TARGET_ipq60xx=y\nCONFIG_TARGET_ipq60xx_generic=y\nCONFIG_TARGET_ipq60xx_generic_DEVICE_jdcloud_ax1800-pro=y\nCONFIG_LUCI=y\nCONFIG_LUCI_LANG_zh_Hans=y\nCONFIG_PACKAGE_curl=y\nCONFIG_PACKAGE_ipset=y\nCONFIG_PACKAGE_kmod-tun=y\nCONFIG_PACKAGE_iptables-mod-tproxy=y\nCONFIG_PACKAGE_v2ray-geodata=y\nCONFIG_PACKAGE_xray-core=y\nCONFIG_PACKAGE_hysteria2=y\nCONFIG_PACKAGE_sing-box=y\nCONFIG_PACKAGE_luci-app-passwall=y\nCONFIG_PACKAGE_luci-i18n-passwall-zh-cn=y\nCONFIG_PACKAGE_wpad-openssl=y" > .config
+          
+          # 重新生成 .config
+          make defconfig
 
       - name: Download dependencies
         run: |
