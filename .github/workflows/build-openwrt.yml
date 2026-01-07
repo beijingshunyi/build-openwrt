@@ -21,13 +21,13 @@ jobs:
         run: |
           sudo apt update -y && sudo apt upgrade -y
           sudo apt install -y build-essential clang flex bison g++ gawk gcc-multilib g++-multilib gettext git libncurses5-dev libssl-dev python3-setuptools rsync swig unzip zlib1g-dev file wget ncurses-term libtinfo5 libncursesw5-dev sed grep findutils
-          sudo/install clean
+          sudo apt autoremove -y && sudo apt clean
 
       - name: Clone source
         run: |
           git clone --depth=1 --branch openwrt-23.05 https://github.com/immortalwrt/immortalwrt.git openwrt
           cd openwrt
-          # 【重要】已移除 kenzo 和 small 源，解决 recursive dependency 错误
+          # 【关键修改】已移除 kenzo 和 small 源，解决 recursive dependency 错误
           # ImmortalWrt 官方源已包含 passwall 及相关插件，无需第三方源
           # echo "src-git kenzo https://github.com/kenzok8/openwrt-packages.git;master" >> feeds.conf.default
           # echo "src-git small https://github.com/kenzok8/small.git;master" >> feeds.conf.default
@@ -37,64 +37,31 @@ jobs:
           cd openwrt
           ./scripts/feeds update -a
 
-      - step: Install feeds
-        name: Install feeds
+      - name: Install feeds
         run: |
-          - name: Install dependencies (Fix)
-          run: |
-            sudo apt install -y build-essential clang flex bison g++ gawk gcc-multilib g++-multilib gettext git libncurses5-dev libssl-dev python3-setuptools rsync swig unzip zlib1g-dev file wget ncurses-term libtinfo5 libncursesw5-dev sed grep findutils
-            sudo apt autoremove -y && sudo apt clean
+          cd openwrt
+          ./scripts/feeds install -a --force-missing
 
-        - name: Clone source
-          run: |
-            git clone --depth=1 --branch openwrt-23.05 https://github.com/beijingshunyi/immortalwrt.git openwrt
-            cd openwrt
-            echo "src-git kenzo https://github.com/kenzok8/openwrt-**packages.git;master" >> feeds.conf.default
-            # 【关键】注释掉 small 源，它是导致 nikki 依赖冲突的主要原因
-            # echo "src-git small https://github.com/kenzok8/small.git;master" >> feeds.conf.default
+      - name: Generate config
+        run: |
+          cd openwrt
+          echo -e "CONFIG_TARGET_ipq60xx=y\nCONFIG_TARGET_ipq60xx_generic=y\nCONFIG_TARGET_ipq60xx_generic_DEVICE_jdcloud_ax1800-pro=y\nCONFIG_LUCI=y\nCONFIG_LUCI_LANG_zh_Hans=y\nCONFIG_PACKAGE_curl=y\nCONFIG_PACKAGE_ipset=y\nCONFIG_PACKAGE_kmod-tun=y\nCONFIG_PACKAGE_iptables-mod-tproxy=y\nCONFIG_PACKAGE_v2ray-geodata=y\nCONFIG_PACKAGE_xray-core=y\nCONFIG_PACKAGE_hysteria=y\nCONFIG_PACKAGE_sing-box=y\nCONFIG_PACKAGE_luci-app-passwall=y\nCONFIG_PACKAGE_luci-i18n-passwall-zh-cn=y\nCONFIG_PACKAGE_passwall-core=y\nCONFIG_PACKAGE_passwall-luci=y\nCONFIG_PACKAGE_wpad-openssl=y" > .config
+          make defconfig
 
-        - name: Update feeds
-          run: |
-            cd openwrt
-            ./scripts/feeds update -a
+      - name: Download dependencies
+        run: |
+          cd openwrt
+          make download -j1 V=s
 
-        - name: Install feeds
-          run: |
-            cd openwrt
-            ./scripts/feeds install -a --force-missing
+      - name: Compile firmware
+        run: |
+          cd openwrt
+          make -j1 prepare V=s
+          make -j$(($(nproc)-2)) V=s
 
-        - name: Remove conflict packages
-          run: |
-            cd openwrt
-            # 只删除 nikki，保留 kenzo 中的其他有用包
-            find feeds -type d -name "nikki" -exec rm -rf {} +
-            find package/feeds -type d -name "nikki" -exec rm -rf {} +
-
-        - name: Generate config
-          defconfig:
-          - name: Generate config
-          run: |
-            cd openwrt
-            echo -e "CONFIG_TARGET_ipq60xx=y\nCONFIG_TARGET_ipq60xx_generic=y\nCONFIG_TARGET_ipq60xx_generic_DEVICE_jdcloud_ax1800-pro=y\nCONFIG_LUCI=y\nCONFIG_LUCI_LANG_zh_Hans=y\nCONFIG_PACKAGE_curl=y\nCONFIG_PACKAGE_ipset=y\nCONFIG_PACKAGE_kmod-tun=y\nCONFIG_PACKAGE_iptables-mod-tproxy=y\nCONFIG_PACKAGE_v2ray-geodata=y\nCONFIG_PACKAGE_xray-core=y\nCONFIG_PACKAGE_hysteria=y\nCONFIG_PACKAGE_sing-box=y\nCONFIG_PACKAGE_luci-app-passwall=y\nCONFIG_PACKAGE_luci-i18n-passwall-zh-cn=y\nCONFIG_PACKAGE_passwall-core=y\nCONFIG_PACKAGE_passwall-luci=y\nCONFIG_PACKAGE_wpad-openssl=y" > .config
-            make defconfig
-
-        - name: Download dependencies
-          run: |
-            cd openwrt
-            make download -j1 V=s
-
-        - name: Compile firmware
-          run: |
-            colled:
-            cd openwrt
-            make -j1 prepare V=s
-            make -j$(($(nproc)-2)) V=s
-
-        - name: Upload firmware
-          uses: actions/upload-artifact@v4
-          with:
-            name: ${{ env.DEVICE }}-firmware
-            path: openwrt
-            # 【修改】路径修正为通用匹配，防止找不到文件
-            path: openwrt/bin/targets/ipq60xx/generic/*.bin
-            if-no-files-found: warn
+      - name: Upload firmware
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ env.DEVICE }}-firmware
+          path: openwrt/bin/targets/ipq60xx/generic/*.bin
+          if-no-files-found: warn
