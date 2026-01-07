@@ -30,28 +30,41 @@ jobs:
           echo "src-git kenzo https://github.com/kenzok8/openwrt-packages.git;master" >> feeds.conf.default
           echo "src-git small https://github.com/kenzok8/small.git;master" >> feeds.conf.default
 
-      - name: Update feeds and block conflict packages
+      - name: Update feeds
         run: |
           cd openwrt
-          # 1. 更新所有 feeds 源码到本地 feeds 目录
           ./scripts/feeds update -a
+
+      - name: Install feeds
+        run: |
+          cd openwrt
+          ./scripts/feeds install -a --force-missing
+
+      - name: Remove conflict packages (Source & Links)
+        run: |
+          cd openwrt
+          echo "正在清理冲突包：luci-app-fchomo, luci-app-easymesh, nikki..."
           
-          # 2. 【彻底修复】在安装之前，直接从 feeds 源码目录中删除这些包
-          # 这样下一步 install 就找不到它们，也就不会把它们加入构建系统
-          echo "正在从 feeds 源码目录中移除冲突包..."
+          # 1. 删除源码目录中的包 (确保 feeds install 无法再次引用)
           find feeds -type d -name "luci-app-fchomo" -exec rm -rf {} +
           find feeds -type d -name "luci-app-easymesh" -exec rm -rf {} +
           find feeds -type d -name "nikki" -exec rm -rf {} +
-          echo "移除完成，开始安装 feeds..."
           
-          # 3. 安装 feeds（此时上述包已被跳过）
-          ./scripts/feeds install -a --force-missing
+          # 2. 删除安装目录中的包/链接 (彻底移除构建系统引用)
+          find package/feeds -type d -name "luci-app-fchomo" -exec rm -rf {} +
+          find package/feeds -type d -name "luci-app-easymesh" -exec rm -rf {} +
+          find package/feeds -type d -name "nikki" -exec rm -rf {} +
+          
+          echo "清理完成。"
 
       - name: Generate config
         run: |
           cd openwrt
+          # 写入基础配置
           echo -e "CONFIG_TARGET_ipq60xx=y\nCONFIG_TARGET_ipq60xx_generic=y\nCONFIG_TARGET_ipq60xx_generic_DEVICE_jdcloud_ax1800-pro=y\nCONFIG_LUCI=y\nCONFIG_LUCI_LANG_zh_Hans=y\nCONFIG_PACKAGE_curl=y\nCONFIG_PACKAGE_ipset=y\nCONFIG_PACKAGE_kmod-tun=y\nCONFIG_PACKAGE_iptables-mod-tproxy=y\nCONFIG_PACKAGE_v2ray-geodata=y\nCONFIG_PACKAGE_xray-core=y\nCONFIG_PACKAGE_hysteria=y\nCONFIG_PACKAGE_sing-box=y\nCONFIG_PACKAGE_luci-app-passwall=y\nCONFIG_PACKAGE_luci-i18n-passwall-zh-cn=y\nCONFIG_PACKAGE_passwall-core=y\nCONFIG_PACKAGE_passwall-luci=y\nCONFIG_PACKAGE_luci-app-fchomo=n\nCONFIG_PACKAGE_luci-app-easymesh=n\nCONFIG_PACKAGE_nikki=n\nCONFIG_PACKAGE_wpad-mesh-openssl=n\nCONFIG_PACKAGE_wpad-openssl=y" > .config
-          make defconfig --silent -o .config
+          
+          # 强制生成配置，这会根据 .config 填充其他依赖，此时因为冲突包已物理删除，不会报错
+          make defconfig
 
       - name: Download dependencies
         run: |
