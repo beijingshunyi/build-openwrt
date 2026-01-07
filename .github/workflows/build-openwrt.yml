@@ -27,9 +27,9 @@ jobs:
         run: |
           git clone --depth=1 --branch openwrt-23.05 https://github.com/immortalwrt/immortalwrt.git openwrt
           cd openwrt
-          # 添加必要的第三方源以支持 SSR Plus 的完整功能（如 V2Ray/Xray 核心）
-          echo "src-git kenzo https://github.com/kenzok8/openwrt-packages.git;master" >> feeds.conf.default
-          echo "src-git small https://github.com/kenzok8/small.git;master" >> feeds.conf.default
+          # 【彻底切断】不再添加任何第三方源，彻底杜绝 fchomo/nikki 的干扰
+          # echo "src-git kenzo https://github.com/kenzok8/openwrt-packages.git;master" >> feeds.conf.default
+          # echo "src-git small https://github.com/kenzok8/small.git;master" >> feeds.conf.default
 
       - name: Update feeds
         run: |
@@ -39,15 +39,14 @@ jobs:
       - name: Install feeds
         run: |
           cd openwrt
-          # 只安装 feeds，不需要删除任何东西，因为 SSR Plus 的依赖链是健康的
           ./scripts/feeds install -a --force-missing
 
       - name: Generate config
         run: |
           cd openwrt
-          # 【核心变更】使用 luci-app-ssr-plus 替代 luci-app-passwall
-          # 保留了 V2Ray, Trojan, Xray 等核心依赖
-          echo -e "CONFIG_TARGET_ipq60xx=y\nCONFIG_TARGET_ipq60xx_generic=y\nCONFIG_TARGET_ipq60xx_generic_DEVICE_jdcloud_ax1800-pro=y\nCONFIG_LUCI=y\nCONFIG_LUCI_LANG_zh_Hans=y\nCONFIG_PACKAGE_curl=y\nCONFIG_PACKAGE_ipset=y\nCONFIG_PACKAGE_kmod-tun=y\nCONFIG_PACKAGE_iptables-mod-tproxy=y\nCONFIG_PACKAGE_v2ray-core=y\nCONFIG_PACKAGE_xray-core=y\nCONFIG_PACKAGE_trojan-plus=y\nCONFIG_PACKAGE_naiveproxy=y\nCONFIG_PACKAGE_luci-app-ssr-plus=y\nCONFIG_PACKAGE_luci-i18n-ssr-plus-zh-cn=y\nCONFIG_PACKAGE_wpad-openssl=y" > .config
+          # 生成配置：只保留官方源自带的 SSR Plus
+          # 注意：由于没有第三方源，部分额外的插件可能不可用，但基础 SSR/V2ray 功能是有的
+          echo -e "CONFIG_TARGET_ipq60xx=y\nCONFIG_TARGET_ipq60xx_generic=y\nCONFIG_TARGET_ipq60xx_generic_DEVICE_jdcloud_ax1800-pro=y\nCONFIG_LUCI=y\nCONFIG_LUCI_LANG_zh_Hans=y\nCONFIG_PACKAGE_curl=y\nCONFIG_PACKAGE_ipset=y\nCONFIG_PACKAGE_kmod-tun=y\nCONFIG_PACKAGE_iptables-mod-tproxy=y\nCONFIG_PACKAGE_luci-app-ssr-plus=y\nCONFIG_PACKAGE_luci-i18n-ssr-plus-zh-cn=y\nCONFIG_PACKAGE_wpad-openssl=y" > .config
           
           make defconfig
 
