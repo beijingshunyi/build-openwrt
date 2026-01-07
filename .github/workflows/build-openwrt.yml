@@ -30,18 +30,22 @@ jobs:
           echo "src-git kenzo https://github.com/kenzok8/openwrt-packages.git;master" >> feeds.conf.default
           echo "src-git small https://github.com/kenzok8/small.git;master" >> feeds.conf.default
 
-      - name: Update feeds and remove conflict packages
+      - name: Update feeds and block conflict packages
         run: |
           cd openwrt
+          # 1. 更新所有 feeds 源码到本地 feeds 目录
           ./scripts/feeds update -a
-          ./scripts/feeds install -a --force-missing
           
-          # 【终极修复】使用 find 命令查找并删除所有冲突包，无论它们在哪个 feeds 子目录下
-          echo "正在全局搜索并删除产生循环依赖的包..."
-          find package/feeds -type d -name "luci-app-fchomo" -exec rm -rf {} +
-          find package/feeds -type d -name "luci-app-easymesh" -exec rm -rf {} +
-          find package/feeds -type d -name "nikki" -exec rm -rf {} +
-          echo "删除完成。"
+          # 2. 【彻底修复】在安装之前，直接从 feeds 源码目录中删除这些包
+          # 这样下一步 install 就找不到它们，也就不会把它们加入构建系统
+          echo "正在从 feeds 源码目录中移除冲突包..."
+          find feeds -type d -name "luci-app-fchomo" -exec rm -rf {} +
+          find feeds -type d -name "luci-app-easymesh" -exec rm -rf {} +
+          find feeds -type d -name "nikki" -exec rm -rf {} +
+          echo "移除完成，开始安装 feeds..."
+          
+          # 3. 安装 feeds（此时上述包已被跳过）
+          ./scripts/feeds install -a --force-missing
 
       - name: Generate config
         run: |
