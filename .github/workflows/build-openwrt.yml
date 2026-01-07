@@ -36,10 +36,12 @@ jobs:
           ./scripts/feeds update -a
           ./scripts/feeds install -a --force-missing
           
-          # 【关键修复】在 install 之后、defconfig 之前删除产生循环依赖的包
-          rm -rf package/feeds/luci/luci-app-fchomo
-          rm -rf package/feeds/luci/luci-app-easymesh
-          rm -rf package/feeds/packages/nikki
+          # 【终极修复】使用 find 命令查找并删除所有冲突包，无论它们在哪个 feeds 子目录下
+          echo "正在全局搜索并删除产生循环依赖的包..."
+          find package/feeds -type d -name "luci-app-fchomo" -exec rm -rf {} +
+          find package/feeds -type d -name "luci-app-easymesh" -exec rm -rf {} +
+          find package/feeds -type d -name "nikki" -exec rm -rf {} +
+          echo "删除完成。"
 
       - name: Generate config
         run: |
